@@ -20,7 +20,7 @@ This game is developed in AngularJs ,Jquery, Prototype.js, NPM , Gulp(Build tool
 3. Run the SQLs in the `database.sql` on your MySQL client.
 4. Open terminal (command line) and `cd` into your project folder 
 5. Run `npm install`
-6. Run gulp
+6. Run `gulp`
 6. Create vhost, see vhost.md file how to create
 6. Open connect.php and make sure the MySQL connection parameters are correct.
 7. Start Apache, PHP, MySQL servers.
