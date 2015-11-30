@@ -2,7 +2,7 @@
  * Created by hraju on 27/11/15.
  */
 (function () {
-var memoryGameApp = angular.module('memoryGameApp', ['ngRoute', 'ui.bootstrap','ngCookies'])
+var memoryGameApp = angular.module('memoryGameApp', ['ngRoute', 'ui.bootstrap'])
     .config(['$routeProvider',function ($routeProvider) {
         $routeProvider
             .when('/', {
@@ -12,9 +12,9 @@ var memoryGameApp = angular.module('memoryGameApp', ['ngRoute', 'ui.bootstrap','
             .otherwise({
                 redirectTo: '/'
             });
-
     }])
     .run(['$rootScope',function($rootScope) {
+        // set number of cards
         $rootScope.noOfCards = 8
     }]);
 })();

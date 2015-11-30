@@ -3,395 +3,389 @@
  */
 (function () {
     angular.module('memoryGameApp').directive("gameCardsDirective",
-        ['Utils', '$rootScope', '$timeout', '$window', 'GameService', 'UserService',
-            function (Utils, $rootScope, $timeout, $window, GameService, UserService) {
+        ['Utils', '$rootScope', '$timeout', '$interval', '$window', 'GameService', 'UserService', '$modal',
+            function (Utils, $rootScope, $timeout, $interval, $window, GameService, UserService, $modal) {
                 function linker(scope, element, attr) {
-
+                    scope.currentScore = 0;
+                    scope.pairsOpened = 0;
+                    scope.timeLapsed = '00:00';
+                    scope.bestScore = 0;
+                    scope.gamesPlayed = 0;
+                    scope.totalMoves = 0;
+                    var $ = $window.jQuery.noConflict();
                     var cardsSequence = GameService.getColorCards($rootScope.noOfCards),
-                        interval,
-                        openCard = function (card, index) {
-                            card.addClassName('open');
-                            Element.setStyle(card, {
-                                backgroundImage: 'url("img/colour' + cardsSequence[index] + '.gif")'
-                            });
-                        },
-                        closeCard = function (card) {
-                            card.removeClassName('open');
-                            Element.setStyle(card, {
-                                backgroundImage: ''
-                            });
-                        },
-                        removeCard = function (card) {
-                            card.removeClassName('open');
-                            card.addClassName('closed');
-                            Element.setStyle(card, {
-                                backgroundImage: 'none'
-                            });
-                        };
+                        interval;
+                    var openCard = function (card, index) {
+                        card.addClass('open');
+                        card.css('background-image', 'url("img/colour' + cardsSequence[index] + '.gif")')
+                    };
+                    var closeCard = function (card) {
+                        card.removeClass('open');
+                        card.css('background-image', '')
+                    };
+                    var removeCard = function (card) {
+                        card.removeClass('open');
+                        card.addClass('closed');
+                        card.css('background-image', 'none')
+                    };
                     var resetGame = function (interval) {
-                        $$('#game-board .card').each(function (element) {
-                            element.removeClassName('open');
-                            element.removeClassName('closed');
-                            element.removeClassName('selected');
-                            Element.setStyle(element, {
-                                backgroundImage: 'url("img/card_bg.gif")'
-                            });
+                        scope.currentScore = 0;
+                        scope.pairsOpened = 0;
+                        scope.timeLapsed = '00:00';
+                        scope.bestScore = 0;
+                        scope.gamesPlayed = 0;
+                        scope.totalMoves = 0;
+                        var gameContainer = angular.element(document.querySelectorAll("#game-board .card"));
+                        gameContainer.each(function (key, gameCard) {
+                            $(gameCard).css('background-image', 'url("img/card_bg.gif")');
+                            $(gameCard).removeClass('open');
+                            $(gameCard).removeClass('closed');
+                            $(gameCard).removeClass('selected');
+
                         });
-
-                        $$('#game-board .card')[0].addClassName('selected');
-
-                        Element.store('current-score', 'value', 0);
-                        Element.store('total-moves', 'value', 0);
-                        Element.store('pairs-opened', 'value', 0);
-                        Element.store('time-lapsed', 'value', 0);
-                        Element.update('current-score', 0);
-                        Element.update('total-moves', 0);
-                        Element.update('pairs-opened', 0);
-                        Element.update('time-lapsed', '00:00');
+                        $(gameContainer[0]).addClass('selected');
 
                         // get these values from server
-                        Element.store('games-played', 'value', 0);
-                        Element.store('best-score', 'value', 0);
-                        Element.update('games-played', 0);
-                        Element.update('best-score', 0);
+                        scope.gamesPlayed = 0;
+                        scope.bestScore = 0;
                         var userid = Utils.readCookie('memory-game-userid');
                         if (userid) {
                             UserService.getUserStats({userid: userid}).then(function (response) {
                                 if (response.success && response.obj) {
-                                    Element.store('games-played', 'value', parseInt(response.obj.count));
-                                    Element.store('best-score', 'value', parseInt(response.obj.max));
-                                    Element.update('games-played', response.obj.count);
-                                    Element.update('best-score', response.obj.max);
+                                    scope.gamesPlayed = parseInt(response.obj.count);
+                                    scope.bestScore = parseInt(response.obj.max);
                                 }
                             });
                         }
+                        if (interval) {
+                            $interval.cancel(interval);
+                        }
+                        return $interval(setTimer, 1000);
+                    };
 
-                        if (interval)
-                            clearInterval(interval);
-                        return setInterval(setTimer, 1000);
+                    var getSeconds = function (time) {
+                        return time.split(':')
+                            .reverse()
+                            .map(Number)
+                            .reduce(function (pUnit, cUnit, index) {
+                                return pUnit + cUnit * Math.pow(60, index);
+                            });
                     };
                     var setTimer = function () {
-                        var time = Element.retrieve('time-lapsed', 'value') + 1;
-                        Element.store('time-lapsed', 'value', time);
-
+                        var time = getSeconds(scope.timeLapsed) + 1;
                         var h = Math.floor(time / 60);
                         h = h < 10 ? '0' + h : h;
                         h = h > 60 ? Math.floor(h / 60) + ':' + h % 60 : h;
                         var m = time % 60;
                         m = m < 10 ? '0' + m : m;
-
-                        Element.update('time-lapsed', h + ':' + m);
+                        scope.timeLapsed = h + ':' + m;
+                        scope.$emit('currentGameDataChanged',
+                            {
+                                currentScore: scope.currentScore,
+                                totalMoves: scope.totalMoves,
+                                pairsOpened: scope.pairsOpened,
+                                timeLapsed: scope.timeLapsed,
+                                callApply: false
+                            }
+                        );
                     };
-
-                    var closeModal = function (id) {
-                        Element.removeClassName('modal-backdrop', 'open');
-                        Element.removeClassName(id, 'open');
-                        $$('#' + id + ' input').each(function (element) {
-                            Form.Element.setValue(element, '');
+                    // scope model
+                    var openShowScoreModal = function (data) {
+                        var modalInstance = $modal.open({
+                            animation: false,
+                            templateUrl: 'template/score-popup.html',
+                            controller: modalInstanceCtrl,
+                            backdrop: true,
+                            size: 'md',
+                            windowClass: 'modal fade in',
+                            resolve: {
+                                data: function () {
+                                    return data
+                                }
+                            }
+                        });
+                        modalInstance.result.then(function (data) {
+                        }, function () {
+                            /** 'Modal dismissed*/
                         });
                     };
-
-                    var openModal = function (id) {
-                        Element.addClassName('modal-backdrop', 'open');
-                        Element.addClassName(id, 'open');
+                    var modalInstanceCtrl = function ($scope, $modalInstance, data) {
+                        $scope.userList = data.userList;
+                        $scope.rankingInfo = data.rankingInfo;
+                        $scope.currentUserId = data.currentUserId;
+                        console.log($scope.currentUserId);
+                        $scope.ok = function () {
+                            $modalInstance.dismiss('cancel');
+                        };
+                        $scope.cancel = function () {
+                            $modalInstance.dismiss('cancel');
+                        };
                     };
 
-                    var closeAllModals = function () {
-                        Element.removeClassName('modal-backdrop', 'open');
-                        $$('.modal').each(function (element) {
-                            closeModal(element.id);
+                    // add user modal
+                    var openRegisterModel = function (data) {
+                        var modalInstance = $modal.open({
+                            animation: false,
+                            templateUrl: 'template/register-popup.html',
+                            controller: function ($scope, $modalInstance, data) {
+                                $scope.finalScore = data;
+                                $scope.user = {};
+                                $scope.submitScore = function () {
+                                    // check to make sure the form is completely valid
+                                    if ($scope.userForm.$valid) {
+                                        $scope.user.userid = Utils.readCookie('memory-game-userid');
+                                        $modalInstance.close();
+                                        sendToServer($scope.user)
+                                    }
+                                };
+                                $scope.playAgain = function () {
+                                    $modalInstance.dismiss('cancel');
+                                    interval = resetGame(interval);
+                                };
+                            },
+                            backdrop: true,
+                            size: 'md',
+                            windowClass: 'modal fade in',
+                            resolve: {
+                                data: function () {
+                                    return data
+                                }
+                            }
+                        });
+                        modalInstance.result.then(function (data) {
+                        }, function () {
+                            /** 'Modal dismissed*/
                         });
                     };
 
                     var gameOver = function (interval) {
                         // increase total games played count
-                        var gamesPlayed = Element.retrieve('games-played', 'value') + 1;
-                        Element.store('games-played', 'value', gamesPlayed);
-                        Element.update('games-played', gamesPlayed);
-
+                        scope.gamesPlayed = scope.gamesPlayed + 1;
                         // update the best score
-                        var bestScore = Element.retrieve('best-score', 'value');
-                        bestScore = Math.max(bestScore, Element.retrieve('current-score', 'value'));
-                        Element.store('best-score', 'value', bestScore);
-                        Element.update('best-score', bestScore);
+                        scope.bestScore = Math.max(scope.bestScore, scope.currentScore);
 
-                        clearInterval(interval);
+                        $interval.cancel(interval);
                         // show name and email boxes when user id is not found in cookie
-                        var userid = Utils.readCookie('memory-game-userid'),
-                            name = Utils.readCookie('memory-game-name'),
-                            email = Utils.readCookie('memory-game-email');
-                        if (Utils.readCookie('memory-game-userid')) {
-                            sendToServer(userid, name, email);
+                        var userid = Utils.readCookie('memory-game-userid');
+                        if (userid) {
+                            var data = {
+                                userid: userid,
+                                name: Utils.readCookie('memory-game-name'),
+                                email: Utils.readCookie('memory-game-email')
+                            };
+                            sendToServer(data);
                         } else {
-                            openModal('modal');
-                            Element.update('final-score', Element.retrieve('current-score', 'value') || 0);
+                            var finalScore = scope.currentScore || 0;
+                            openRegisterModel(finalScore);
                         }
                     };
 
-                    var submitScore = function () {
-                        if (Element.hasClassName('submit-score', 'disabled')) {
-                            return;
-                        }
-
-                        Element.up('user-name').removeClassName('error');
-                        Element.next('user-name').update('');
-                        Element.up('user-email').removeClassName('error');
-                        Element.next('user-email').update('');
-
-                        var name = Form.Element.getValue('user-name');
-                        var email = Form.Element.getValue('user-email');
-
-                        var error = false;
-                        if (!name || !name.strip().length) {
-                            Element.up('user-name').addClassName('error');
-                            Element.next('user-name').update('Please enter your name.');
-                            error = true;
-                        }
-                        if (!email || !email.strip().length) {
-                            Element.up('user-email').addClassName('error');
-                            Element.next('user-email').update('Please enter your email address.');
-                            error = true;
-                        }
-                        if (email && !Utils.validateEmail(email.strip())) {
-                            Element.up('user-email').addClassName('error');
-                            Element.next('user-email').update('Please enter a valid email address.');
-                            error = true;
-                        }
-                        if (error) {
-                            return;
-                        } else {
-                            Element.addClassName('submit-score', 'disabled');
-                            sendToServer(0, name.strip(), email.strip());
-                        }
-                    };
                     // send the data to server
-                    var sendToServer = function (userid, name, email) {
+                    var sendToServer = function (data) {
                         var obj = {
                             appId: 'memory-game',
-                            userid: userid,
-                            user: name,
-                            email: email,
-                            score: Element.retrieve('current-score', 'value') || 0,
-                            moves: Element.retrieve('total-moves', 'value') || 0,
-                            time: Element.retrieve('time-lapsed', 'value') || 0
+                            userid: data.userid,
+                            user: data.name,
+                            email: data.email,
+                            score: scope.currentScore || 0,
+                            moves: scope.totalMoves || 0,
+                            time: getSeconds(scope.timeLapsed) || 0
                         };
                         UserService.saveScore(obj).then(function (response) {
                             //response = JSON.parse(response);
                             if (response.success) {
-                                // update "welcome guest"
-                                Element.update('welcome-user-address', 'Hi');
-                                Element.update('welcome-user-name', response.name);
-                                Element.show('not-you');
                                 // set user id and name in cookie
                                 Utils.createCookie('memory-game-userid', response.userid, 10);
                                 Utils.createCookie('memory-game-name', response.name, 10);
                                 Utils.createCookie('memory-game-email', response.email, 10);
+                                // update "welcome guest"
+                                showUserInfo();
                             } else {
                                 alert('Something went wrong. Please try again.');
                             }
-                            Element.removeClassName('submit-score', 'disabled');
-                            closeAllModals();
-                            showScores(obj.score);
+                            scope.showScores(obj.score);
                         });
                     };
-                    var showScores = function (currentScore) {
-                        openModal('modal1');
+                    scope.showScores = function (currentScore) {
                         UserService.getScores().then(function (response) {
-                            Element.update('ranking', ' ');
+                            var rankingInfo = '';
+                            scope.userList = [];
                             if (response.success && response.rows && response.rows.length > 0) {
-                                var html = '';
-                                response.rows.map(function (r, i) {
-                                    var isThis = Utils.readCookie('memory-game-userid') == r.id;
+                                var currentUserId = Utils.readCookie('memory-game-userid');
+                                response.rows.map(function (row, i) {
+                                    var isThis = currentUserId == row.id;
                                     if (isThis) {
-                                        Element.update('ranking', (currentScore ? 'You scored ' + currentScore + ' in this game! ' : '') +
-                                            'You currently rank ' + (i + 1) + ' in the leaderboard.');
+                                        rankingInfo = (currentScore ? 'You scored ' + currentScore + ' in this game! ' : '') +
+                                            'You current rank ' + (i + 1) + ' in the leader board.';
                                     }
-                                    html += '<tr ' + (isThis ? 'class="highlight"' : '') + '>';
-                                    html += '<td>' + (i + 1) + '</td>';
-                                    html += '<td>' + r.name + '</td>';
-                                    html += '<td>' + r.email + '</td>';
-                                    html += '<td>' + r.score + '</td>';
-                                    html += '</tr>';
                                 });
-                                Element.update('table-body', html);
-                            } else {
-                                Element.update('table-body', '<tr><td colspan="4">No scores submitted yet.</td></tr>');
+                                var data = {
+                                    userList: response.rows,
+                                    rankingInfo: rankingInfo,
+                                    currentUserId: Utils.readCookie('memory-game-userid')
+                                };
+                                openShowScoreModal(data)
                             }
                         });
                     };
                     scope.restart = function () {
-                        if (Element.retrieve('pairs-opened', 'value') != $rootScope.noOfCards) {
+                        if (scope.pairsOpened != $rootScope.noOfCards) {
                             var answer = confirm('Restarting the game will loose your progress. Are you sure you want to restart?');
                             if (answer) {
                                 cardsSequence = GameService.getColorCards($rootScope.noOfCards);
                                 interval = resetGame(interval);
                             }
                         } else {
-                            cardsSequence = GameService.getColorCards();
+                            cardsSequence = GameService.getColorCards($rootScope.noOfCards);
                             interval = resetGame(interval);
                         }
                     };
-                    scope.submitScore = function () {
-                        submitScore()
+
+                    var showUserInfo = function () {
+                        scope.userAddress = Utils.readCookie('memory-game-userid') ? 'Hi' : 'Welcome';
+                        scope.userName = Utils.readCookie('memory-game-userid') ? Utils.readCookie('memory-game-name') : 'Guest';
+                        scope.currentUserId = Utils.readCookie('memory-game-userid');
                     };
-                    scope.showScores = function () {
-                        submitScore()
+                    var updateCurrentScoreBoard = function (action) {
+                        if (action === 'decrease') {
+                            scope.currentScore = scope.currentScore - 1;
+                        } else {
+                            scope.currentScore = scope.currentScore + 1;
+                        }
+
                     };
-                    scope.notYou = function(){
+                    scope.notYou = function () {
                         Utils.eraseCookie('memory-game-userid');
                         Utils.eraseCookie('memory-game-name');
                         Utils.eraseCookie('memory-game-email');
-
-                        Element.update('welcome-user-address', Utils.readCookie('memory-game-userid') ? 'Hi' : 'Welcome');
-                        Element.update('welcome-user-name', Utils.readCookie('memory-game-userid') ? Utils.readCookie('memory-game-name') : 'Guest');
-                        Element.toggle('not-you', Utils.readCookie('memory-game-userid') ? true : false);
+                        showUserInfo();
                         interval = resetGame(interval);
                     };
+                    scope.$on("currentGameDataChanged", function (event, newData) {
+                        if (newData) {
+                            scope.currentScore = newData.currentScore;
+                            scope.totalMoves = newData.totalMoves;
+                            scope.pairsOpened = newData.pairsOpened;
+                            scope.timeLapsed = newData.timeLapsed;
+                        }
+                        if (newData.callApply) {
+                            scope.$apply();
+                        }
+                    });
                     $timeout(function () {
                         angular.element(document).ready(function () {
-                            Element.update('welcome-user-address', Utils.readCookie('memory-game-userid') ? 'Hi' : 'Welcome');
-                            Element.update('welcome-user-name', Utils.readCookie('memory-game-userid') ? Utils.readCookie('memory-game-name') : 'Guest');
-                            Element.toggle('not-you', Utils.readCookie('memory-game-userid') ? true : false);
-
+                            showUserInfo();
+                            scope.currentScore = 0;
+                            scope.pairsOpened = 0;
+                            scope.timeLapsed = 0;
                             angular.element($window).bind("keydown", function (event) {
-                                if (Element.hasClassName('modal', 'open') || Element.hasClassName('game-board', 'disabled')) {
+                                if (element.hasClass('modal', 'open') ||
+                                    element.hasClass('game-board', 'disabled')) {
                                     return;
                                 }
-                                var currentCard = Selector.findElement($$('#game-board .card'), '.selected');
+                                scope.$emit('currentGameDataChanged',
+                                    {
+                                        currentScore: scope.currentScore,
+                                        totalMoves: scope.totalMoves,
+                                        pairsOpened: scope.pairsOpened,
+                                        timeLapsed: scope.timeLapsed,
+                                        callApply: true
+                                    }
+                                );
+                                var currentCard = document.querySelector("#game-board .selected");
                                 var currentIndex = currentCard.previousSiblings().size();
 
                                 var noOfCards = $rootScope.noOfCards || 8;
-                                var halfWayIndex = noOfCards / 2; // 4 in the case of 8 cards
-                                var lastIndex = noOfCards * 2 - 1; // 15 in the case of 8 cards
+                                var halfWayIndex = noOfCards / 2;
+                                var lastIndex = noOfCards * 2 - 1;
 
                                 var keyID = event.which || event.keyCode;
+
                                 switch (keyID) {
-                                    case Event.KEY_LEFT:
-                                        event.preventDefault(); // prevent the default action, like horizontal scroll
+                                    case 37:
+                                        event.preventDefault();
                                         if (currentIndex) {
-                                            currentCard.removeClassName('selected');
-                                            currentCard.previous().addClassName('selected');
+                                            $(currentCard).removeClass('selected');
+                                            $(currentCard.previous()).addClass('selected');
                                         }
                                         break;
-                                    case Event.KEY_RIGHT:
+                                    case 39:
                                         event.preventDefault();
                                         if (currentIndex != lastIndex) {
-                                            currentCard.removeClassName('selected');
-                                            currentCard.next().addClassName('selected');
+                                            $(currentCard).removeClass('selected');
+                                            $(currentCard).next().addClass('selected');
                                         }
                                         break;
-                                    case Event.KEY_DOWN:
+                                    case 40:
                                         event.preventDefault();
                                         if (currentIndex + halfWayIndex <= lastIndex) {
-                                            currentCard.removeClassName('selected');
-                                            currentCard.next(halfWayIndex - 1).addClassName('selected');
+                                            $(currentCard).removeClass('selected');
+                                            $(currentCard.next(halfWayIndex - 1)).addClass('selected');
                                         }
                                         break;
-                                    case Event.KEY_UP:
+                                    case 38:
                                         event.preventDefault();
                                         if (currentIndex - halfWayIndex >= 0) {
-                                            currentCard.removeClassName('selected');
-                                            currentCard.previous(halfWayIndex - 1).addClassName('selected');
+                                            $(currentCard).removeClass('selected');
+                                            $(currentCard.previous(halfWayIndex - 1)).addClass('selected');
                                         }
                                         break;
-                                    case Event.KEY_RETURN:
+                                    case 13:
                                         event.preventDefault();
-                                        var openedCard = Selector.findElement($$('#game-board .card'), '.open');
-                                        if (currentCard.hasClassName('closed')) {
+                                        var openedCard = document.querySelector("#game-board .open");
+
+                                        if ($(currentCard).hasClass('closed')) {
                                             // do nothing
                                         } else if (!openedCard) { // no other card is open
-                                            openCard(currentCard, currentIndex);
+                                            openCard($(currentCard), currentIndex);
                                         } else if (openedCard == currentCard) { // this card is open
                                             // do nothing
                                         } else { // one other cell is open
-                                            openCard(currentCard, currentIndex);
-
+                                            openCard($(currentCard), currentIndex);
                                             // increase total moves
-                                            var totalMoves = Element.retrieve('total-moves', 'value') + 1;
-                                            Element.store('total-moves', 'value', totalMoves);
-                                            Element.update('total-moves', totalMoves);
+                                            scope.totalMoves = scope.totalMoves + 1;
+                                            var gameBoard = angular.element(document.querySelector("#game-board"));
+                                            gameBoard.addClass('disabled');
+                                            // Delay because we want to show the user the pair matching
+                                            setTimeout(function () {
+                                                gameBoard.removeClass('disabled');
+                                                var openedColor = $(openedCard).css('background-image');
+                                                var currentColor = $(currentCard).css('background-image');
 
-                                            Element.addClassName('game-board', 'disabled');
-                                            // add more logic
-                                            setTimeout(function () { // delay because we want to show the user the pair matching
-                                                Element.removeClassName('game-board', 'disabled');
-
-                                                var currentScore,
-                                                    pairsOpened,
-                                                    openedColor = Element.getStyle(openedCard, 'background-image'),
-                                                    currentColor = Element.getStyle(currentCard, 'background-image');
                                                 if (openedColor == currentColor) {
-
                                                     // increase current score
-                                                    currentScore = Element.retrieve('current-score', 'value') + 1;
-                                                    Element.store('current-score', 'value', currentScore);
-                                                    Element.update('current-score', currentScore);
+                                                    updateCurrentScoreBoard('increase');
 
                                                     // increase pairs opened
-                                                    pairsOpened = Element.retrieve('pairs-opened', 'value') + 1;
-                                                    Element.store('pairs-opened', 'value', pairsOpened);
-                                                    Element.update('pairs-opened', pairsOpened);
-
-                                                    removeCard(openedCard);
-                                                    removeCard(currentCard);
-
-                                                    if (pairsOpened == $rootScope.noOfCards) {
+                                                    scope.pairsOpened = scope.pairsOpened + 1;
+                                                    removeCard($(openedCard));
+                                                    removeCard($(currentCard));
+                                                    if (scope.pairsOpened == $rootScope.noOfCards) {
                                                         gameOver(interval);
                                                     }
-
                                                 } else {
-
                                                     // decrease current score
-                                                    currentScore = Element.retrieve('current-score', 'value') - 1;
-                                                    Element.store('current-score', 'value', currentScore);
-                                                    Element.update('current-score', currentScore);
-
-                                                    closeCard(openedCard);
-                                                    closeCard(currentCard);
+                                                    updateCurrentScoreBoard('decrease');
+                                                    closeCard($(openedCard));
+                                                    closeCard($(currentCard));
                                                 }
                                             }, 250);
-
+                                            scope.$emit('currentGameDataChanged',
+                                                {
+                                                    currentScore: scope.currentScore,
+                                                    totalMoves: scope.totalMoves,
+                                                    pairsOpened: scope.pairsOpened,
+                                                    timeLapsed: scope.timeLapsed,
+                                                    callApply: true
+                                                }
+                                            );
                                         }
                                         break;
                                 }
-                                Element.update('welcome-user-address', Utils.readCookie('memory-game-userid') ? 'Hi' : 'Welcome');
-                                Element.update('welcome-user-name', Utils.readCookie('memory-game-userid') ? Utils.readCookie('memory-game-name') : 'Guest');
-                                Element.toggle('not-you', Utils.readCookie('memory-game-userid') ? true : false);
+                                showUserInfo()
                             });
-                            element.on('click', function (event) {
-                                var element = event.target;
-                                if (Element.match(element, '.modal-backdrop')) {
-                                    closeAllModals();
-                                }
-                                if (Element.match(element, '.close') || Element.match(element, '.cancel')) {
-                                    closeModal(Element.up(element, '.modal').id);
-                                }
-                                if (element.id == 'submit-score') {
-                                    submitScore();
-                                }
-                                if (Element.match(element, '.play-again')) {
-                                    closeModal(Element.up(element, '.modal').id);
-                                    interval = resetGame(interval);
-                                }
-                                if (element.id == 'show-scores') {
-                                    showScores();
-                                }
-                                if (element.id == 'not-you') {
-                                    event.preventDefault();
-                                    Utils.eraseCookie('memory-game-userid');
-                                    Utils.eraseCookie('memory-game-name');
-                                    Utils.eraseCookie('memory-game-email');
-
-                                    Element.update('welcome-user-address', Utils.readCookie('memory-game-userid') ? 'Hi' : 'Welcome');
-                                    Element.update('welcome-user-name', Utils.readCookie('memory-game-userid') ? Utils.readCookie('memory-game-name') : 'Guest');
-                                    Element.toggle('not-you', Utils.readCookie('memory-game-userid') ? true : false);
-                                    interval = resetGame(interval);
-                                } else {
-                                    // event.preventDefault();
-                                }
-                            });
-                            interval = resetGame(interval);
                         });
+                        interval = resetGame(interval);
                     })
                 }
 

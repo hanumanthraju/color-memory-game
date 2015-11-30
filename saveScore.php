@@ -26,7 +26,7 @@ if($userid == 0) {
 $query = "INSERT INTO game (userid, score, time, moves, timestamp) VALUES ($userid, $score, $time, $moves, now())";
 $mysqli->query($query);
 $id = $mysqli->insert_id;
-
+#echo $query;
 // setup our response "object"
 $resp = new stdClass();
 $resp->success = false;
@@ -35,6 +35,7 @@ if($id>0) {
     $resp->userid = $userid;
     $resp->name = $user;
     $resp->email = $email;
+    $resp->id = $id;
 }
 
 print json_encode($resp);

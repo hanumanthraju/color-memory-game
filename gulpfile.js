@@ -5,20 +5,15 @@ var uglify = require('gulp-uglify');
 var ngAnnotate = require('gulp-ng-annotate');
 var minifyCss = require("gulp-minify-css");
 var gutil = require('gulp-util');
-var templateCache = require('gulp-angular-templatecache');
 var del = require('del');
 
 
 var paths = {
-    scripts: ['!build/','*.js', '**/*.js',
-        '!gulpfile.js', '!proty.js', '!node_modules/**', '!css/'
-    ],
 
     buildPath : './build/',
 
-    images: 'images/**/*',
-
     cssPath:[
+        'css/bootstrap.css',
         'css/reset.css',
         'css/style.css'
     ],
@@ -69,7 +64,6 @@ gulp.task('clean', function (cb) {
 });
 
 // The default task (called when you run `gulp` from cli)
-
 gulp.task('default', [
     'clean',
     'minfy-vendor-js',
